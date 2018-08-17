@@ -1,0 +1,493 @@
+#!/bin/bash
+
+# Initialize default variables:
+outline_ext="gm1"
+outline=""
+drill_ext="drl"
+drill=""
+fcu_ext="gtl"
+fcu=""
+fmask_ext="gts"
+fmask=""
+fsilk_ext="gto"
+fsilk=""
+bcu_ext="gbl"
+bcu=""
+bmask_ext="gbs"
+bmask=""
+bsilk_ext="gbo"
+bsilk=""
+directory="."
+resolution="600"
+render="0"
+front_image_name="front-render.png"
+back_image_name="back-render.png"
+solder_mask_color="green"
+silk_screen_color="white"
+copper_color="silver"
+
+version="GerberRender 0.1"
+copy="Copyright (c) 2018 Goodtime Development"
+
+# Help function
+show_help () {
+    	cat << stop
+'gerbrend' renders gerber files into png image(s) that represent what the PCB will look 
+like in real life. Running the command without any options uses the defaults variables 
+to render both the front and back images and searches the local directory for the gerber 
+files to use.
+
+Version: $version
+$copy
+
+Usage: gerbrend [options....]
+
+Available options:
+  -F    Only render the front gerber files
+  -B    Only render the back gerber files
+
+  -r    Image resolution
+        Default: $resolution
+  -p    Solder mask/PCB color. Can only be green, red, blue, yellow, black, or white
+        Default: $solder_mask_color
+  -w    Silk screen color. Can only be black or white
+        Default: $silk_screen_color
+  -c    Copper color. Can only be silver and gold
+        Default: $copper_color
+
+  -l    Directory location containing the gerber files
+        Default: $directory
+
+  -o    Outline file extension 
+        Default: $outline_ext
+  -d    Drill file extension
+        Default: $drill_ext
+  -f    Front copper file extension
+        Default: $fcu_ext
+  -m    Front solder mask file extension
+        Default: $fmask_ext
+  -s    Front silk screen file extension
+        Default: $fsilk_ext
+  -b    Back copper file extension
+        Default: $bcu_ext
+  -n    Back solder mask file extension
+        Default: $bmask_ext
+  -t    Back silk screen file extension
+        Default: $bsilk_ext
+
+  --front_image=...     
+        File name of the final rendered front image
+        Default: $front_image_name
+  --back_image=...
+        File name of the final rendered front image
+        Default: $back_image_name
+        
+  --outline=...    
+        Outline file path 
+  --drill=...
+        Drill file path
+  --front_copper=...
+        Front copper file path
+  --front_mask=...
+        Front solder mask file path
+  --front_silk=...
+        Front silk screen file path
+  --back_copper=...
+        Back copper file path
+  --back_mask=...
+        Back solder mask file path
+  --back_silk=...
+        Back silk screen file path
+
+  -h|--help    
+        This message
+stop
+}
+
+# Interpret options. Options proceed by a ':' require an argument
+while getopts ":FBp:w:c:l:o:d:f:m:s:b:n:t:r:h-" opt; do
+    case $opt in
+    F)  render=$(( 1 | $render ))   ;;
+    B)  render=$(( 2 | $render ))   ;;
+    p)  solder_mask_color=$OPTARG   ;;
+    w)  silk_screen_color=$OPTARG   ;;
+    c)  copper_color=$OPTARG        ;;
+    l)  directory=$OPTARG           ;;
+    o)  outline_ext=$OPTARG         ;;
+    d)  drill_ext=$OPTARG           ;;
+    f)  fcu_ext=$OPTARG             ;;
+    m)  fmask_ext=$OPTARG           ;;
+    s)  fsilk_ext=$OPTARG           ;;
+    b)  bcu_ext=$OPTARG             ;;
+    n)  bmask_ext=$OPTARG           ;;
+    t)  bsilk_ext=$OPTARG           ;;
+    r)  resolution=$OPTARG          ;;
+    h|\?)
+        show_help
+        exit 0
+        ;;
+    :)  # An option requiring an argument didn't get passed with one
+        echo "Option -$OPTARG requires an argument." >&2
+        echo 
+        show_help
+        exit 1
+        ;;
+    -)  # Handle the long options
+        # If the OPTIND is greater than or equal to 1, subtrac one, else keep it as 1
+        [ $OPTIND -ge 1 ] && optind=$(expr $OPTIND - 1 ) || optind=$OPTIND
+        # Get the entire option string
+        eval OPTION="\$$optind"
+        # Get everything after the '='
+        OPTARG=$(echo $OPTION | cut -d'=' -f2)
+        # Get everything before the '='
+        OPTION=$(echo $OPTION | cut -d'=' -f1)
+        # Interpret the long options
+        case $OPTION in
+        --front_image)  front_image_name=$OPTARG    ;;
+        --back_image)   back_image_name=$OPTARG     ;;
+        --outline)      outline=$OPTARG             ;;
+        --drill)        drill=$OPTARG               ;;
+        --front_copper) fcu=$OPTARG                 ;;
+        --front_mask)   fmask=$OPTARG               ;;
+        --front_silk)   fsilk=$OPTARG               ;;
+        --back_copper)  bcu=$OPTARG                 ;;
+        --back_mask)    bmask=$OPTARG               ;;
+        --back_silk)    bsilk=$OPTARG               ;;
+        --help|*)
+            show_help
+            exit 0
+            ;;
+        esac
+        OPTIND=1
+        shift
+        ;;
+    esac
+done
+
+# Function to check if the provided gerber file exists or find the gerber file
+check_find_file () {
+    # If the initial filename is empty, find the gerber file
+    if [ -z "$file" ]; then
+        file=$(find "$directory" -name "*.$ext" 2> /dev/null)
+        # Find didn't return any results, thus no gerber file
+        if [ -z "$file" ]; then
+            echo Error: Can\'t find the $name file.
+            echo Try running the script in the directory containing the gerbers
+            exit 1
+        fi
+        # Find found at least two files
+        if [[ $(echo $file | egrep '[^\s] [^\s]') ]]; then
+            echo Error: Found too many $name files.
+            exit 1
+        fi
+        # Remove the './' from CWD find results
+        # Not necessary but it looks nicer when printed on the screen
+        if [ $directory == '.' ]; then
+            file=$(echo $file | cut -d'/' -f 2)
+        fi
+    # The file was provided as an option
+    else
+        # The provided file does not exist
+        if [ ! -f $file ]; then
+            echo Error: No $name file
+            exit 1
+        fi
+    fi
+}
+
+ext=$outline_ext
+file=$outline
+name="outline"
+check_find_file
+outline=$file
+echo 'Outline file:           '$outline
+
+ext=$drill_ext
+file=$drill
+name="drill"
+check_find_file
+drill=$file
+echo 'Drill file:             '$drill
+
+find_front_files () {
+    ext=$fcu_ext
+    file=$fcu
+    name="front copper"
+    check_find_file
+    fcu=$file
+    echo 'Front copper file:      '$fcu
+
+    ext=$fmask_ext
+    file=$fmask
+    name="front solder mask"
+    check_find_file
+    fmask=$file
+    echo 'Front solder mask file: '$fmask
+
+    ext=$fsilk_ext
+    file=$fsilk
+    name="front silk screen"
+    check_find_file
+    fsilk=$file
+    echo 'Front silk screen file: '$fsilk
+}
+
+find_back_files () {
+    ext=$bcu_ext
+    file=$bcu
+    name="back copper"
+    check_find_file
+    bcu=$file
+    echo 'Back copper file:       '$bcu
+
+    ext=$bmask_ext
+    file=$bmask
+    name="back solder mask"
+    check_find_file
+    bmask=$file
+    echo 'Back solder mask file:  '$bmask
+
+    ext=$bsilk_ext
+    file=$bsilk
+    name="back silk screen"
+    check_find_file
+    bsilk=$file
+    echo 'Back silk screen file:  '$bsilk
+}
+
+# $render equals 0 if neither --front nor --back was passed as an option,
+# or it equals 3 if both were passed as options
+if [ "$render" -eq 0 -o "$render" -eq 3 ]; then
+    find_front_files
+    find_back_files
+# Only --front was passed as an option
+elif [ "$render" -eq 1 ]; then 
+    find_front_files
+# Only --back was passed as an option
+elif [ "$render" -eq 2 ]; then
+    find_back_files
+else
+    echo Error: Something happened. Nothing is being rendered.
+    exit 1
+fi
+
+solder_mask_color=${solder_mask_color,,}
+case $solder_mask_color in
+green)  mcolor='#225533'    ;;
+red)    mcolor='#CC0000'    ;;
+blue)   mcolor='#00284A'    ;;
+yellow) mcolor='#EDD400'    ;;
+black)  mcolor='#2D2D2D'    ;;
+white)  mcolor='#E6E6E6'    ;;
+*) 
+    echo Error: unknown solder mask color.
+    echo Can only be green, red, blue, yellow, black, or white
+    exit 1
+    ;;
+esac
+
+silk_screen_color=${silk_screen_color,,}
+case $silk_screen_color in
+black)  scolor='#1D1D1DFF'  ;;
+white)  scolor='#EEEEEEFF'  ;;
+*) 
+    echo Error: unknown silk screen color.
+    echo Can only be black, or white
+    exit 1
+    ;;
+esac
+
+copper_color=${copper_color,,}
+copper_color=$(echo "$copper_color" | awk '{print tolower($0)}')
+case $copper_color in
+silver) ccolor='#8A8A8A'  ;; # 8A8A8A a0a0a0
+gold)   ccolor='#E3bd91'  ;;
+*) 
+    echo Error: unknown copper color.
+    echo Can only be silver or gold
+    exit 1
+    ;;
+esac
+
+render_front () {
+    #### OUTLINE #####
+    echo -ne Rendering front outline layer... 
+    gerbv -x png -D $resolution -B 1 -b '#FFFFFF' -o gerbrend-temp/foutline.png \
+    -f '#000000FF' $outline \
+    -f '#FF0000FF' $drill \
+    -f '#FFFFFFFF' $fcu \
+    -f '#FFFFFFFF' $fsilk \
+    -f '#FFFFFFFF' $fmask
+
+    echo -ne  Converting colors... 
+    # Color the region outside the outline red
+    convert gerbrend-temp/foutline.png -fill '#FF0000' -floodfill +0,+0 '#FFFFFF' gerbrend-temp/foutline.png
+    # Fill inside of outline the color of the PCB
+    convert gerbrend-temp/foutline.png -fill $mcolor -opaque '#FFFFFF' gerbrend-temp/foutline.png
+    # Make everything that is red transparent, ie the holes and the outside 
+    convert gerbrend-temp/foutline.png -transparent '#FF0000' gerbrend-temp/foutline.png
+    echo Done!
+
+    #### COPPER #####
+    echo -ne Rendering front copper layer... 
+    gerbv -x png -D $resolution -B 1 -b '#FFFFFF' -o gerbrend-temp/fcu.png \
+    -f '#FFFFFFFF' $drill \
+    -f '#000000FF' $fcu \
+    -f '#FFFFFFFF' $outline \
+    -f '#FFFFFFFF' $fsilk \
+    -f '#FFFFFFFF' $fmask
+
+    echo -ne  Converting colors... 
+    # Convert the copper traces from black to the trace color
+    convert gerbrend-temp/fcu.png -fill $ccolor -opaque '#000000' gerbrend-temp/fcu.png
+    # Make everything that is white transparent
+    convert gerbrend-temp/fcu.png -transparent '#FFFFFF' gerbrend-temp/fcu.png
+    echo Done!
+
+    #### SOLDER MASK #####
+    echo -ne Rendering front solder mask layer... 
+    gerbv -x png -D $resolution -B 1 -b '#FFFFFF' -o gerbrend-temp/fmask.png \
+    -f '#000000FF' $outline \
+    -f '#FF0000FF' $fmask \
+    -f '#FFFFFFFF' $fcu \
+    -f '#FFFFFFFF' $fsilk \
+    -f '#FFFFFFFF' $drill
+
+    echo -ne  Converting colors... 
+    # Color the region outside the outline red
+    convert gerbrend-temp/fmask.png -fill '#FF0000' -floodfill +0,+0 '#FFFFFF' gerbrend-temp/fmask.png
+    # Convert the solder mask to the PCB color
+    convert gerbrend-temp/fmask.png -fill $mcolor -opaque '#FFFFFF' gerbrend-temp/fmask.png
+    # Make everything that is red transparent
+    convert gerbrend-temp/fmask.png -transparent '#FF0000' gerbrend-temp/fmask.png
+    # Make the entire image somewhat transparent
+    convert gerbrend-temp/fmask.png -alpha set -channel a -evaluate multiply 0.85 +channel gerbrend-temp/fmask.png
+    echo Done!
+
+    #### SILK SCREEN #####
+    echo -ne Rendering front silk screen layer... 
+    gerbv -x png -D $resolution -B 1 -b '#FFFFFF' -o gerbrend-temp/fsilk.png \
+    -f $scolor $fsilk \
+    -f '#FFFFFFFF' $fmask \
+    -f '#FFFFFFFF' $drill \
+    -f '#FFFFFFFF' $fcu \
+    -f '#FFFFFFFF' $outline
+
+    echo -ne  Converting colors... 
+    # Make everything that is white transparent
+    convert gerbrend-temp/fsilk.png -transparent '#FFFFFF' gerbrend-temp/fsilk.png
+    echo Done!
+
+    #### FINAL IMAGE #####
+    echo -ne Combining front layers...
+    convert gerbrend-temp/foutline.png \
+    gerbrend-temp/fcu.png \
+    gerbrend-temp/fmask.png \
+    gerbrend-temp/fsilk.png \
+    -background none -flatten \
+    $front_image_name
+
+    echo Done!
+}
+
+render_back () {
+    #### OUTLINE #####
+    echo -ne Rendering back outline layer... 
+    gerbv -x png -D $resolution -B 1 -b '#FFFFFF' -o gerbrend-temp/boutline.png \
+    -f '#000000FF' $outline \
+    -f '#FF0000FF' $drill \
+    -f '#FFFFFFFF' $bcu \
+    -f '#FFFFFFFF' $bsilk \
+    -f '#FFFFFFFF' $bmask
+
+    echo -ne  Converting colors... 
+    # Color the region outside the outline red
+    convert gerbrend-temp/boutline.png -fill '#FF0000' -floodfill +0,+0 '#FFFFFF' gerbrend-temp/boutline.png
+    # Fill inside of outline the color of the PCB
+    convert gerbrend-temp/boutline.png -fill $mcolor -opaque '#FFFFFF' gerbrend-temp/boutline.png
+    # Make everything that is red transparent, ie the holes and the outside 
+    convert gerbrend-temp/boutline.png -transparent '#FF0000' gerbrend-temp/boutline.png
+    echo Done!
+
+    #### COPPER #####
+    echo -ne Rendering back copper layer... 
+    gerbv -x png -D $resolution -B 1 -b '#FFFFFF' -o gerbrend-temp/bcu.png \
+    -f '#FFFFFFFF' $drill \
+    -f '#000000FF' $bcu \
+    -f '#FFFFFFFF' $outline \
+    -f '#FFFFFFFF' $bsilk \
+    -f '#FFFFFFFF' $bmask
+
+    echo -ne  Converting colors... 
+    # Convert the copper traces from black to the trace color
+    convert gerbrend-temp/bcu.png -fill $ccolor -opaque '#000000' gerbrend-temp/bcu.png
+    # Make everything that is white transparent
+    convert gerbrend-temp/bcu.png -transparent '#FFFFFF' gerbrend-temp/bcu.png
+    echo Done!
+
+    #### SOLDER MASK #####
+    echo -ne Rendering back solder mask layer... 
+    gerbv -x png -D $resolution -B 1 -b '#FFFFFF' -o gerbrend-temp/bmask.png \
+    -f '#000000FF' $outline \
+    -f '#FF0000FF' $bmask \
+    -f '#FFFFFFFF' $bcu \
+    -f '#FFFFFFFF' $bsilk \
+    -f '#FFFFFFFF' $drill
+
+    echo -ne  Converting colors... 
+    # Color the region outside the outline red
+    convert gerbrend-temp/bmask.png -fill '#FF0000' -floodfill +0,+0 '#FFFFFF' gerbrend-temp/bmask.png
+    # Convert the solder mask to the PCB color
+    convert gerbrend-temp/bmask.png -fill $mcolor -opaque '#FFFFFF' gerbrend-temp/bmask.png
+    # Make everything that is red transparent
+    convert gerbrend-temp/bmask.png -transparent '#FF0000' gerbrend-temp/bmask.png
+    # Make the entire image somewhat transparent
+    convert gerbrend-temp/bmask.png -alpha set -channel a -evaluate multiply 0.85 +channel gerbrend-temp/bmask.png
+    echo Done!
+
+    #### SILK SCREEN #####
+    echo -ne Rendering back silk screen layer... 
+    gerbv -x png -D $resolution -B 1 -b '#FFFFFF' -o gerbrend-temp/bsilk.png \
+    -f $scolor $bsilk \
+    -f '#FFFFFFFF' $drill \
+    -f '#FFFFFFFF' $bcu \
+    -f '#FFFFFFFF' $outline \
+    -f '#FFFFFFFF' $bmask
+
+    echo -ne  Converting colors... 
+    # Make everything that is white transparent
+    convert gerbrend-temp/bsilk.png -transparent '#FFFFFF' gerbrend-temp/bsilk.png
+    echo Done!
+
+    #### FINAL IMAGE #####
+    echo -ne Combining back layers...
+    convert gerbrend-temp/boutline.png \
+    gerbrend-temp/bcu.png \
+    gerbrend-temp/bmask.png \
+    gerbrend-temp/bsilk.png \
+    -background none -flatten -flop \
+    $back_image_name
+
+    echo Done!
+}
+
+# Make a temporary directory to store all the intermediate steps
+mkdir gerbrend-temp
+
+# $render equals 0 if neither --front nor --back was passed as an option,
+# or it equals 3 if both were passed as options
+if [ "$render" -eq 0 -o "$render" -eq 3 ]; then
+    render_front
+    render_back
+# Only --front was passed as an option
+elif [ "$render" -eq 1 ]; then 
+    render_front
+# Only --back was passed as an option
+elif [ "$render" -eq 2 ]; then
+    render_back
+fi
+
+# Remove the temporary directory
+rm -rf gerbrend-temp
+
+exit 0
