@@ -7,12 +7,12 @@ README
 ### Status
 So far so good
 
-### Prerequisites
+### Dependencies
  * [gerbv](http://gerbv.geda-project.org/) Renders the gerber files
  * [ImageMagick](https://www.imagemagick.org) Makes everything pretty
  
 ### Installation and usage
-Install the prerequisites: `sudo apt install gerbv` and `sudo apt install imagemagick`. 
+Install the dependencies: `sudo apt install gerbv imagemagick`. 
 
 Clone the GerberRender repository: `git clone https://github.com/brandtks/GerberRender.git`.
 
