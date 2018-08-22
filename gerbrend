@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# When a interrupt command is recieved, remove the temp directory and exit the script
+trap 'echo; rm -rf gerbrend-temp; exit 130' int
+
 # Initialize default variables:
 outline_ext="gm1"
 outline=""
