@@ -2,7 +2,7 @@ README
 ======
 **Gerber Render**
 
-Renders gerber files into png image(s) that represent what the front and back of the PCB will look like in real life. Inspired by the [gerblook](gerblook.org) website and its constant down time.
+Renders gerber files into png image(s) that represent what the front and back of the PCB will look like in real life. Inspired by the [gerblook](http://gerblook.org/) website and its constant down time.
 
 
 ### Dependencies
