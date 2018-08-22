@@ -4,21 +4,21 @@
 trap 'echo; rm -rf gerbrend-temp; exit 130' int
 
 # Initialize default variables:
-outline_ext="gm1"
+outline_ext=".*/*\(\.out\|\.oln\|\.gm1\|\.gbr\|\.gml\|\.gko\|\.gm16\|*board\.*\)"
 outline=""
-drill_ext="drl"
+drill_ext=".*/*\(\.dri\|\.drl\|\.drd\|\.txt\)"
 drill=""
-fcu_ext="gtl"
+fcu_ext=".*/*\(\.gtl\|\.cmp\|\.top\|\*toplayer*\.ger\|*top*copper\.*\)"
 fcu=""
-fmask_ext="gts"
+fmask_ext=".*/*\(\.gts\|\.stc\|\.smt\|*topsoldermask*\.ger\|*top*mask\.*\|*top*umask\.*\)"
 fmask=""
-fsilk_ext="gto"
+fsilk_ext=".*/*\(\.gto\|\.sst\|\*topsilkscreen*\.ger\|*top*silk\.*\)"
 fsilk=""
-bcu_ext="gbl"
+bcu_ext=".*/*\(\.gbl\|\.sol\|\.bot\|\*bottomlayer*\.ger\|*bottom*copper\.*\)"
 bcu=""
-bmask_ext="gbs"
+bmask_ext=".*/*\(\.gbs\|\.sts\|\.smb\|*bottomsoldermask*\.ger\|*bottom*mask\.*\|*bottom*umask\.*\)"
 bmask=""
-bsilk_ext="gbo"
+bsilk_ext=".*/*\(\.gbo\|\.ssb\|\*bottomsilkscreen*\.ger\|*bottom*silk\.*\)"
 bsilk=""
 directory="."
 resolution="600"
@@ -29,7 +29,7 @@ solder_mask_color="green"
 silk_screen_color="white"
 copper_color="silver"
 
-version="GerberRender 0.2"
+version="GerberRender 0.3"
 copy="Copyright (c) 2018 Goodtime Development"
 
 # Help function
@@ -48,7 +48,6 @@ Usage: gerbrend [options....]
 Available options:
   -F    Only render the front gerber files
   -B    Only render the back gerber files
-
   -r    Image resolution
         Default: $resolution
   -p    Solder mask/PCB color. Can only be green, red, blue, yellow, black, or white
@@ -59,54 +58,26 @@ Available options:
         Default: $copper_color
   -l    Directory location containing the gerber files
         Default: $directory
-  -o    Outline file extension 
-        Default: $outline_ext
-  -d    Drill file extension
-        Default: $drill_ext
-  -f    Front copper file extension
-        Default: $fcu_ext
-  -m    Front solder mask file extension
-        Default: $fmask_ext
-  -s    Front silk screen file extension
-        Default: $fsilk_ext
-  -b    Back copper file extension
-        Default: $bcu_ext
-  -n    Back solder mask file extension
-        Default: $bmask_ext
-  -t    Back silk screen file extension
-        Default: $bsilk_ext
-  -x    Keep temporary files
-
-  --front_image=...     
-        File name of the final rendered front image
+  -i    File name of the final rendered front image
         Default: $front_image_name
-  --back_image=...
-        File name of the final rendered front image
-        Default: $back_image_name   
-  --outline=...    
-        Outline file path 
-  --drill=...
-        Drill file path
-  --front_copper=...
-        Front copper file path
-  --front_mask=...
-        Front solder mask file path
-  --front_silk=...
-        Front silk screen file path
-  --back_copper=...
-        Back copper file path
-  --back_mask=...
-        Back solder mask file path
-  --back_silk=...
-        Back silk screen file path
-
+  -j    File name of the final rendered front image
+        Default: $back_image_name  
+  -o    Outline file path 
+  -d    Drill file path
+  -f    Front copper file path
+  -m    Front solder mask file path
+  -s    Front silk screen file path
+  -b    Back copper file path
+  -n    Back solder mask file path
+  -t    Back silk screen file path
+  -x    Keep temporary files
   -h|--help    
         This message
 stop
 }
 
 # Interpret options. Options proceed by a ':' require an argument
-while getopts ":FBp:w:c:l:o:d:f:m:s:b:n:t:r:xh-" opt; do
+while getopts ":FBxhp:w:c:l:o:d:f:m:s:b:n:t:r:i:j:" opt; do
     case $opt in
     F)  render=$(( 1 | $render ))   ;;
     B)  render=$(( 2 | $render ))   ;;
@@ -114,71 +85,48 @@ while getopts ":FBp:w:c:l:o:d:f:m:s:b:n:t:r:xh-" opt; do
     w)  silk_screen_color=$OPTARG   ;;
     c)  copper_color=$OPTARG        ;;
     l)  directory=$OPTARG           ;;
-    o)  outline_ext=$OPTARG         ;;
-    d)  drill_ext=$OPTARG           ;;
-    f)  fcu_ext=$OPTARG             ;;
-    m)  fmask_ext=$OPTARG           ;;
-    s)  fsilk_ext=$OPTARG           ;;
-    b)  bcu_ext=$OPTARG             ;;
-    n)  bmask_ext=$OPTARG           ;;
-    t)  bsilk_ext=$OPTARG           ;;
+    o)  outline=$OPTARG             ;;
+    d)  drill=$OPTARG               ;;
+    f)  fcu=$OPTARG                 ;;
+    m)  fmask=$OPTARG               ;;
+    s)  fsilk=$OPTARG               ;;
+    b)  bcu=$OPTARG                 ;;
+    n)  bmask=$OPTARG               ;;
+    t)  bsilk=$OPTARG               ;;
     r)  resolution=$OPTARG          ;;
+    i)  front_image_name="${OPTARG/#\~/$HOME}"  ;;
+    j)  back_image_name="${OPTARG/#\~/$HOME}"   ;;
     x)  keep_temp='true'            ;;
     h|\?)
         show_help
-        exit 1
+        exit 0
         ;;
     :)  # An option requiring an argument didn't get passed with one
-        echo "Option -$OPTARG requires an argument." >&2
-        echo 
+        echo "ERROR: Option -$OPTARG requires an argument." >&2
         show_help
         exit 1
-        ;;
-    -)  # Handle the long options
-        # Get the entire option string
-        eval OPTION="\$$OPTIND"
-        # Get everything after the '='
-        OPTARG=$(echo $OPTION | cut -d'=' -f2)
-        # Get everything before the '='
-        OPTION=$(echo $OPTION | cut -d'=' -f1)
-        # Interpret the long options
-        case $OPTION in
-        --front_image)  front_image_name="${OPTARG/#\~/$HOME}"  ;;
-        --back_image)   back_image_name="${OPTARG/#\~/$HOME}"   ;;
-        --outline)      outline=$OPTARG             ;;
-        --drill)        drill=$OPTARG               ;;
-        --front_copper) fcu=$OPTARG                 ;;
-        --front_mask)   fmask=$OPTARG               ;;
-        --front_silk)   fsilk=$OPTARG               ;;
-        --back_copper)  bcu=$OPTARG                 ;;
-        --back_mask)    bmask=$OPTARG               ;;
-        --back_silk)    bsilk=$OPTARG               ;;
-        --help|*)
-            echo $OPTION
-            show_help
-            exit 1
-            ;;
-        esac
-        OPTIND=1
-        shift
         ;;
     esac
 done
 
+shift $(( $OPTIND - 1 ))
+
 # Function to check if the provided gerber file exists or find the gerber file
 check_find_file () {
-    # If the initial filename is empty, find the gerber file
-    if [ -z "$file" ]; then
-        file=$(find "$directory" -name "*.$ext" 2> /dev/null)
+    # If only two parameters where passes to the function the first one, ie the file name is empty
+    if [ $# -eq 2 ]; then
+        echo finding file with $1
+        file=$(find . -regextype sed -regex $1 2> /dev/null)
         # Find didn't return any results, thus no gerber file
         if [ -z "$file" ]; then
-            echo Error: Can\'t find the $name file.
-            echo Try running the script in the directory containing the gerbers
+            echo ERROR: Can\'t find the $2 file. >&2
+            echo Try running the script in the directory containing the gerbers >&2
             exit 1
         fi
         # Find found at least two files
         if [[ $(echo $file | egrep '[^\s] [^\s]') ]]; then
-            echo Error: Found too many $name files.
+            echo ERROR: Found too many $2 files. >&2
+            echo $file
             exit 1
         fi
         # Remove the './' from CWD find results
@@ -189,69 +137,45 @@ check_find_file () {
     # The file was provided as an option
     else
         # The provided file does not exist
-        if [ ! -f $file ]; then
-            echo Error: No $name file
+        if [ ! -f $1 ]; then
+            echo ERROR: No $3 file >&2
             exit 1
         fi
     fi
 }
 
-ext=$outline_ext
-file=$outline
-name="outline"
-check_find_file
+check_find_file $outline $outline_ext "outline"
 outline=$file
 echo 'Outline file:           '$outline
 
-ext=$drill_ext
-file=$drill
-name="drill"
-check_find_file
+check_find_file $drill $drill_ext "drill"
 drill=$file
 echo 'Drill file:             '$drill
 
 find_front_files () {
-    ext=$fcu_ext
-    file=$fcu
-    name="front copper"
-    check_find_file
+    check_find_file $fcu $fcu_ext "front copper"
     fcu=$file
     echo 'Front copper file:      '$fcu
 
-    ext=$fmask_ext
-    file=$fmask
-    name="front solder mask"
-    check_find_file
+    check_find_file $fmask $fmask_ext "front solder mask"
     fmask=$file
     echo 'Front solder mask file: '$fmask
 
-    ext=$fsilk_ext
-    file=$fsilk
-    name="front silk screen"
-    check_find_file
+    check_find_file $fsilk $fsilk_ext "front silk screen"
     fsilk=$file
     echo 'Front silk screen file: '$fsilk
 }
 
 find_back_files () {
-    ext=$bcu_ext
-    file=$bcu
-    name="back copper"
-    check_find_file
+    check_find_file $bcu $bcu_ext "back copper"
     bcu=$file
     echo 'Back copper file:       '$bcu
 
-    ext=$bmask_ext
-    file=$bmask
-    name="back solder mask"
-    check_find_file
+    check_find_file $bmask $bmask_ext "back solder mask"
     bmask=$file
     echo 'Back solder mask file:  '$bmask
 
-    ext=$bsilk_ext
-    file=$bsilk
-    name="back silk screen"
-    check_find_file
+    check_find_file $bsilk $bsilk_ext "back silk screen"
     bsilk=$file
     echo 'Back silk screen file:  '$bsilk
 }
@@ -268,7 +192,7 @@ elif [ "$render" -eq 1 ]; then
 elif [ "$render" -eq 2 ]; then
     find_back_files
 else
-    echo Error: Something happened. Nothing is being rendered.
+    echo ERROR: Something happened. Nothing is being rendered. >&2
     exit 1
 fi
 
@@ -281,8 +205,8 @@ yellow) mcolor='#EDD400'    ;;
 black)  mcolor='#2D2D2D'    ;;
 white)  mcolor='#E6E6E6'    ;;
 *) 
-    echo Error: unknown solder mask color.
-    echo Can only be green, red, blue, yellow, black, or white
+    echo ERROR: unknown solder mask color. >&2
+    echo Can only be green, red, blue, yellow, black, or white >&2
     exit 1
     ;;
 esac
@@ -292,8 +216,8 @@ case $silk_screen_color in
 black)  scolor='#1D1D1DFF'  ;;
 white)  scolor='#EEEEEEFF'  ;;
 *) 
-    echo Error: unknown silk screen color.
-    echo Can only be black, or white
+    echo ERROR: unknown silk screen color. >&2
+    echo Can only be black, or white >&2
     exit 1
     ;;
 esac
@@ -303,8 +227,8 @@ case $copper_color in
 silver) ccolor='#8A8A8A'  ;;
 gold)   ccolor='#E3bd91'  ;;
 *) 
-    echo Error: unknown copper color.
-    echo Can only be silver or gold
+    echo ERROR: unknown copper color. >&2
+    echo Can only be silver or gold >&2
     exit 1
     ;;
 esac
@@ -471,8 +395,10 @@ render_back () {
     -background none -flatten -flop \
     png32:gerbrend-temp/bfinal.png
     # Copy final image to destination
-    cp gerbrend-temp/bfinal.png $back_image_name
     echo Done!
+
+    echo Storing image at $back_image_name
+    cp gerbrend-temp/bfinal.png $back_image_name
 }
 
 # Make a temporary directory to store all the intermediate steps
