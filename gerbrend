@@ -71,32 +71,31 @@ Available options:
   -n    Back solder mask file path
   -t    Back silk screen file path
   -x    Keep temporary files
-  -h|--help    
-        This message
+  -h    This message
 stop
 }
 
 # Interpret options. Options proceed by a ':' require an argument
 while getopts ":FBxhp:w:c:l:o:d:f:m:s:b:n:t:r:i:j:" opt; do
     case $opt in
-    F)  render=$(( 1 | $render ))   ;;
-    B)  render=$(( 2 | $render ))   ;;
-    p)  solder_mask_color=$OPTARG   ;;
-    w)  silk_screen_color=$OPTARG   ;;
-    c)  copper_color=$OPTARG        ;;
-    l)  directory=$OPTARG           ;;
-    o)  outline=$OPTARG             ;;
-    d)  drill=$OPTARG               ;;
-    f)  fcu=$OPTARG                 ;;
-    m)  fmask=$OPTARG               ;;
-    s)  fsilk=$OPTARG               ;;
-    b)  bcu=$OPTARG                 ;;
-    n)  bmask=$OPTARG               ;;
-    t)  bsilk=$OPTARG               ;;
-    r)  resolution=$OPTARG          ;;
+    F)  render=$(( 1 | $render ))               ;;
+    B)  render=$(( 2 | $render ))               ;;
+    p)  solder_mask_color=$OPTARG               ;;
+    w)  silk_screen_color=$OPTARG               ;;
+    c)  copper_color=$OPTARG                    ;;
+    l)  directory="${OPTARG/#\~/$HOME}"         ;;
+    o)  outline="${OPTARG/#\~/$HOME}"           ;;
+    d)  drill="${OPTARG/#\~/$HOME}"             ;;
+    f)  fcu="${OPTARG/#\~/$HOME}"               ;;
+    m)  fmask="${OPTARG/#\~/$HOME}"             ;;
+    s)  fsilk="${OPTARG/#\~/$HOME}"             ;;
+    b)  bcu="${OPTARG/#\~/$HOME}"               ;;
+    n)  bmask="${OPTARG/#\~/$HOME}"             ;;
+    t)  bsilk="${OPTARG/#\~/$HOME}"             ;;
+    r)  resolution=$OPTARG                      ;;
     i)  front_image_name="${OPTARG/#\~/$HOME}"  ;;
     j)  back_image_name="${OPTARG/#\~/$HOME}"   ;;
-    x)  keep_temp='true'            ;;
+    x)  keep_temp='true'                        ;;
     h|\?)
         show_help
         exit 0
@@ -140,6 +139,7 @@ check_find_file () {
             echo ERROR: No $3 file >&2
             exit 1
         fi
+        file=$1
     fi
 }
 
@@ -223,8 +223,8 @@ esac
 
 copper_color=${copper_color,,}
 case $copper_color in
-silver) ccolor='#8A8A8A'  ;;
-gold)   ccolor='#E3bd91'  ;;
+silver) ccolor='#8A8A8A'    ;;
+gold)   ccolor='#E3bd91'    ;;
 *) 
     echo ERROR: unknown copper color. >&2
     echo Can only be silver or gold >&2
