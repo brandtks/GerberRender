@@ -209,6 +209,8 @@ white)  mcolor='#E6E6E6'    ;;
     exit 1
     ;;
 esac
+# Create a slightly transparent version of the solder mask color
+mcoloralpha=$mcolor'bb'
 
 silk_screen_color=${silk_screen_color,,}
 case $silk_screen_color in
@@ -282,7 +284,6 @@ render_front () {
     convert gerbrend-temp/fmask.png -bordercolor '#FFFFFF' -border 1 \
     -fill '#FF0000' -floodfill +0,+0 '#FFFFFF' -shave 1x1 png32:gerbrend-temp/fmask.png
     # Convert the solder mask to the PCB color
-    mcoloralpha=$mcolor'bb'
     convert gerbrend-temp/fmask.png -channel RGBA -fill $mcoloralpha -opaque '#FFFFFF' png32:gerbrend-temp/fmask.png
     # Make everything that is red transparent
     convert gerbrend-temp/fmask.png -transparent '#FF0000' png32:gerbrend-temp/fmask.png
@@ -365,7 +366,6 @@ render_back () {
     convert gerbrend-temp/bmask.png -bordercolor '#FFFFFF' -border 1 \
     -fill '#FF0000' -floodfill +0,+0 '#FFFFFF' -shave 1x1 png32:gerbrend-temp/bmask.png
     # Convert the solder mask to the PCB color
-    mcoloralpha=$mcolor'bb'
     convert gerbrend-temp/bmask.png -channel RGBA -fill $mcoloralpha -opaque '#FFFFFF' png32:gerbrend-temp/bmask.png
     # Make everything that is red transparent
     convert gerbrend-temp/bmask.png -transparent '#FF0000' png32:gerbrend-temp/bmask.png
@@ -394,15 +394,16 @@ render_back () {
     -background none -flatten -flop \
     png32:gerbrend-temp/bfinal.png
     # Copy final image to destination
-    echo Done!
-
-    echo Storing image at $back_image_name
     cp gerbrend-temp/bfinal.png $back_image_name
+    echo Done!   
 }
 
 # Make a temporary directory to store all the intermediate steps
 if [ ! -d gerbrend-temp ]; then
     mkdir gerbrend-temp
+else
+    # If the directory already, we'll just keep it after the script is done running to prevent anything bad from happening
+    keep_temp=true
 fi
 
 # $render equals 0 if neither --front nor --back was passed as an option,
