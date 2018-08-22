@@ -26,7 +26,7 @@ solder_mask_color="green"
 silk_screen_color="white"
 copper_color="silver"
 
-version="GerberRender 0.1"
+version="GerberRender 0.2"
 copy="Copyright (c) 2018 Goodtime Development"
 
 # Help function
@@ -54,10 +54,8 @@ Available options:
         Default: $silk_screen_color
   -c    Copper color. Can only be silver and gold
         Default: $copper_color
-
   -l    Directory location containing the gerber files
         Default: $directory
-
   -o    Outline file extension 
         Default: $outline_ext
   -d    Drill file extension
@@ -74,14 +72,14 @@ Available options:
         Default: $bmask_ext
   -t    Back silk screen file extension
         Default: $bsilk_ext
+  -x    Keep temporary files
 
   --front_image=...     
         File name of the final rendered front image
         Default: $front_image_name
   --back_image=...
         File name of the final rendered front image
-        Default: $back_image_name
-        
+        Default: $back_image_name   
   --outline=...    
         Outline file path 
   --drill=...
@@ -105,7 +103,7 @@ stop
 }
 
 # Interpret options. Options proceed by a ':' require an argument
-while getopts ":FBp:w:c:l:o:d:f:m:s:b:n:t:r:h-" opt; do
+while getopts ":FBp:w:c:l:o:d:f:m:s:b:n:t:r:xh-" opt; do
     case $opt in
     F)  render=$(( 1 | $render ))   ;;
     B)  render=$(( 2 | $render ))   ;;
@@ -122,9 +120,10 @@ while getopts ":FBp:w:c:l:o:d:f:m:s:b:n:t:r:h-" opt; do
     n)  bmask_ext=$OPTARG           ;;
     t)  bsilk_ext=$OPTARG           ;;
     r)  resolution=$OPTARG          ;;
+    x)  keep_temp='true'            ;;
     h|\?)
         show_help
-        exit 0
+        exit 1
         ;;
     :)  # An option requiring an argument didn't get passed with one
         echo "Option -$OPTARG requires an argument." >&2
@@ -133,18 +132,16 @@ while getopts ":FBp:w:c:l:o:d:f:m:s:b:n:t:r:h-" opt; do
         exit 1
         ;;
     -)  # Handle the long options
-        # If the OPTIND is greater than or equal to 1, subtrac one, else keep it as 1
-        [ $OPTIND -ge 1 ] && optind=$(expr $OPTIND - 1 ) || optind=$OPTIND
         # Get the entire option string
-        eval OPTION="\$$optind"
+        eval OPTION="\$$OPTIND"
         # Get everything after the '='
         OPTARG=$(echo $OPTION | cut -d'=' -f2)
         # Get everything before the '='
         OPTION=$(echo $OPTION | cut -d'=' -f1)
         # Interpret the long options
         case $OPTION in
-        --front_image)  front_image_name=$OPTARG    ;;
-        --back_image)   back_image_name=$OPTARG     ;;
+        --front_image)  front_image_name="${OPTARG/#\~/$HOME}"  ;;
+        --back_image)   back_image_name="${OPTARG/#\~/$HOME}"   ;;
         --outline)      outline=$OPTARG             ;;
         --drill)        drill=$OPTARG               ;;
         --front_copper) fcu=$OPTARG                 ;;
@@ -154,8 +151,9 @@ while getopts ":FBp:w:c:l:o:d:f:m:s:b:n:t:r:h-" opt; do
         --back_mask)    bmask=$OPTARG               ;;
         --back_silk)    bsilk=$OPTARG               ;;
         --help|*)
+            echo $OPTION
             show_help
-            exit 0
+            exit 1
             ;;
         esac
         OPTIND=1
@@ -300,7 +298,7 @@ esac
 copper_color=${copper_color,,}
 copper_color=$(echo "$copper_color" | awk '{print tolower($0)}')
 case $copper_color in
-silver) ccolor='#8A8A8A'  ;; # 8A8A8A a0a0a0
+silver) ccolor='#8A8A8A'  ;;
 gold)   ccolor='#E3bd91'  ;;
 *) 
     echo Error: unknown copper color.
@@ -321,11 +319,11 @@ render_front () {
 
     echo -ne  Converting colors... 
     # Color the region outside the outline red
-    convert gerbrend-temp/foutline.png -fill '#FF0000' -floodfill +0,+0 '#FFFFFF' gerbrend-temp/foutline.png
+    convert gerbrend-temp/foutline.png -bordercolor '#FFFFFF' -border 1 -fill '#FF0000' -floodfill +0,+0 '#FFFFFF' -shave 1x1 png32:gerbrend-temp/foutline.png
     # Fill inside of outline the color of the PCB
-    convert gerbrend-temp/foutline.png -fill $mcolor -opaque '#FFFFFF' gerbrend-temp/foutline.png
+    convert gerbrend-temp/foutline.png -fill $mcolor -opaque '#FFFFFF' png32:gerbrend-temp/foutline.png
     # Make everything that is red transparent, ie the holes and the outside 
-    convert gerbrend-temp/foutline.png -transparent '#FF0000' gerbrend-temp/foutline.png
+    convert gerbrend-temp/foutline.png -transparent '#FF0000' png32:gerbrend-temp/foutline.png
     echo Done!
 
     #### COPPER #####
@@ -339,9 +337,9 @@ render_front () {
 
     echo -ne  Converting colors... 
     # Convert the copper traces from black to the trace color
-    convert gerbrend-temp/fcu.png -fill $ccolor -opaque '#000000' gerbrend-temp/fcu.png
+    convert gerbrend-temp/fcu.png -fill $ccolor -opaque '#000000' png32:gerbrend-temp/fcu.png
     # Make everything that is white transparent
-    convert gerbrend-temp/fcu.png -transparent '#FFFFFF' gerbrend-temp/fcu.png
+    convert gerbrend-temp/fcu.png -transparent '#FFFFFF' png32:gerbrend-temp/fcu.png
     echo Done!
 
     #### SOLDER MASK #####
@@ -355,13 +353,13 @@ render_front () {
 
     echo -ne  Converting colors... 
     # Color the region outside the outline red
-    convert gerbrend-temp/fmask.png -fill '#FF0000' -floodfill +0,+0 '#FFFFFF' gerbrend-temp/fmask.png
+    convert gerbrend-temp/fmask.png -bordercolor '#FFFFFF' -border 1 \
+    -fill '#FF0000' -floodfill +0,+0 '#FFFFFF' -shave 1x1 png32:gerbrend-temp/fmask.png
     # Convert the solder mask to the PCB color
-    convert gerbrend-temp/fmask.png -fill $mcolor -opaque '#FFFFFF' gerbrend-temp/fmask.png
+    mcoloralpha=$mcolor'bb'
+    convert gerbrend-temp/fmask.png -channel RGBA -fill $mcoloralpha -opaque '#FFFFFF' png32:gerbrend-temp/fmask.png
     # Make everything that is red transparent
-    convert gerbrend-temp/fmask.png -transparent '#FF0000' gerbrend-temp/fmask.png
-    # Make the entire image somewhat transparent
-    convert gerbrend-temp/fmask.png -alpha set -channel a -evaluate multiply 0.85 +channel gerbrend-temp/fmask.png
+    convert gerbrend-temp/fmask.png -transparent '#FF0000' png32:gerbrend-temp/fmask.png
     echo Done!
 
     #### SILK SCREEN #####
@@ -375,7 +373,7 @@ render_front () {
 
     echo -ne  Converting colors... 
     # Make everything that is white transparent
-    convert gerbrend-temp/fsilk.png -transparent '#FFFFFF' gerbrend-temp/fsilk.png
+    convert gerbrend-temp/fsilk.png -transparent '#FFFFFF' png32:gerbrend-temp/fsilk.png
     echo Done!
 
     #### FINAL IMAGE #####
@@ -385,8 +383,9 @@ render_front () {
     gerbrend-temp/fmask.png \
     gerbrend-temp/fsilk.png \
     -background none -flatten \
-    $front_image_name
-
+    png32:gerbrend-temp/ffinal.png
+    # Copy final image to destination
+    cp gerbrend-temp/ffinal.png $front_image_name
     echo Done!
 }
 
@@ -402,11 +401,12 @@ render_back () {
 
     echo -ne  Converting colors... 
     # Color the region outside the outline red
-    convert gerbrend-temp/boutline.png -fill '#FF0000' -floodfill +0,+0 '#FFFFFF' gerbrend-temp/boutline.png
+    convert gerbrend-temp/boutline.png -bordercolor '#FFFFFF' -border 1 \
+    -fill '#FF0000' -floodfill +0,+0 '#FFFFFF' -shave 1x1 png32:gerbrend-temp/boutline.png
     # Fill inside of outline the color of the PCB
-    convert gerbrend-temp/boutline.png -fill $mcolor -opaque '#FFFFFF' gerbrend-temp/boutline.png
+    convert gerbrend-temp/boutline.png -fill $mcolor -opaque '#FFFFFF' png32:gerbrend-temp/boutline.png
     # Make everything that is red transparent, ie the holes and the outside 
-    convert gerbrend-temp/boutline.png -transparent '#FF0000' gerbrend-temp/boutline.png
+    convert gerbrend-temp/boutline.png -transparent '#FF0000' png32:gerbrend-temp/boutline.png
     echo Done!
 
     #### COPPER #####
@@ -420,9 +420,9 @@ render_back () {
 
     echo -ne  Converting colors... 
     # Convert the copper traces from black to the trace color
-    convert gerbrend-temp/bcu.png -fill $ccolor -opaque '#000000' gerbrend-temp/bcu.png
+    convert gerbrend-temp/bcu.png -fill $ccolor -opaque '#000000' png32:gerbrend-temp/bcu.png
     # Make everything that is white transparent
-    convert gerbrend-temp/bcu.png -transparent '#FFFFFF' gerbrend-temp/bcu.png
+    convert gerbrend-temp/bcu.png -transparent '#FFFFFF' png32:gerbrend-temp/bcu.png
     echo Done!
 
     #### SOLDER MASK #####
@@ -436,13 +436,13 @@ render_back () {
 
     echo -ne  Converting colors... 
     # Color the region outside the outline red
-    convert gerbrend-temp/bmask.png -fill '#FF0000' -floodfill +0,+0 '#FFFFFF' gerbrend-temp/bmask.png
+    convert gerbrend-temp/bmask.png -bordercolor '#FFFFFF' -border 1 \
+    -fill '#FF0000' -floodfill +0,+0 '#FFFFFF' -shave 1x1 png32:gerbrend-temp/bmask.png
     # Convert the solder mask to the PCB color
-    convert gerbrend-temp/bmask.png -fill $mcolor -opaque '#FFFFFF' gerbrend-temp/bmask.png
+    mcoloralpha=$mcolor'bb'
+    convert gerbrend-temp/bmask.png -channel RGBA -fill $mcoloralpha -opaque '#FFFFFF' png32:gerbrend-temp/bmask.png
     # Make everything that is red transparent
-    convert gerbrend-temp/bmask.png -transparent '#FF0000' gerbrend-temp/bmask.png
-    # Make the entire image somewhat transparent
-    convert gerbrend-temp/bmask.png -alpha set -channel a -evaluate multiply 0.85 +channel gerbrend-temp/bmask.png
+    convert gerbrend-temp/bmask.png -transparent '#FF0000' png32:gerbrend-temp/bmask.png
     echo Done!
 
     #### SILK SCREEN #####
@@ -456,7 +456,7 @@ render_back () {
 
     echo -ne  Converting colors... 
     # Make everything that is white transparent
-    convert gerbrend-temp/bsilk.png -transparent '#FFFFFF' gerbrend-temp/bsilk.png
+    convert gerbrend-temp/bsilk.png -transparent '#FFFFFF' png32:gerbrend-temp/bsilk.png
     echo Done!
 
     #### FINAL IMAGE #####
@@ -466,13 +466,16 @@ render_back () {
     gerbrend-temp/bmask.png \
     gerbrend-temp/bsilk.png \
     -background none -flatten -flop \
-    $back_image_name
-
+    png32:gerbrend-temp/bfinal.png
+    # Copy final image to destination
+    cp gerbrend-temp/bfinal.png $back_image_name
     echo Done!
 }
 
 # Make a temporary directory to store all the intermediate steps
-mkdir gerbrend-temp
+if [ ! -d gerbrend-temp ]; then
+    mkdir gerbrend-temp
+fi
 
 # $render equals 0 if neither --front nor --back was passed as an option,
 # or it equals 3 if both were passed as options
@@ -487,7 +490,9 @@ elif [ "$render" -eq 2 ]; then
     render_back
 fi
 
-# Remove the temporary directory
-rm -rf gerbrend-temp
+# Remove the temporary directory if keep temp flag wasn't set
+if [ -z $keep_temp ]; then
+    rm -rf gerbrend-temp
+fi
 
 exit 0

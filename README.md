@@ -26,6 +26,7 @@ GerberRender can be ran by simply running `gerbrend [options...]`. Running the c
  * __-w__ Defines the silk screen color. Can only be black or white
  * __-c__ Defines the copper color. Can only be silver and gold
  * __-l__ Directory location containing the gerber files
+ * __-x__ Check temporary working directory, contains the images for all the intermediate steps
  * __-o__ File extension of the outline gerber file
  * __-d__ File extension of the drill gerber file
  * __-f__ File extension of the front copper gerber file
