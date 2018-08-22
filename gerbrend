@@ -115,11 +115,10 @@ shift $(( $OPTIND - 1 ))
 check_find_file () {
     # If only two parameters where passes to the function the first one, ie the file name is empty
     if [ $# -eq 2 ]; then
-        echo finding file with $1
-        file=$(find . -regextype sed -regex $1 2> /dev/null)
+        file=$(find $directory -regextype sed -regex $1 2> /dev/null)
         # Find didn't return any results, thus no gerber file
         if [ -z "$file" ]; then
-            echo ERROR: Can\'t find the $2 file. >&2
+            echo ERROR: Can\'t find the $2 file in $directory. >&2
             echo Try running the script in the directory containing the gerbers >&2
             exit 1
         fi
