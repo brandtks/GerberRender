@@ -299,7 +299,6 @@ white)  scolor='#EEEEEEFF'  ;;
 esac
 
 copper_color=${copper_color,,}
-copper_color=$(echo "$copper_color" | awk '{print tolower($0)}')
 case $copper_color in
 silver) ccolor='#8A8A8A'  ;;
 gold)   ccolor='#E3bd91'  ;;
@@ -322,7 +321,8 @@ render_front () {
 
     echo -ne  Converting colors... 
     # Color the region outside the outline red
-    convert gerbrend-temp/foutline.png -bordercolor '#FFFFFF' -border 1 -fill '#FF0000' -floodfill +0,+0 '#FFFFFF' -shave 1x1 png32:gerbrend-temp/foutline.png
+    convert gerbrend-temp/foutline.png -bordercolor '#FFFFFF' -border 1 \
+    -fill '#FF0000' -floodfill +0,+0 '#FFFFFF' -shave 1x1 png32:gerbrend-temp/foutline.png
     # Fill inside of outline the color of the PCB
     convert gerbrend-temp/foutline.png -fill $mcolor -opaque '#FFFFFF' png32:gerbrend-temp/foutline.png
     # Make everything that is red transparent, ie the holes and the outside 
