@@ -34,7 +34,7 @@ GerberRender can be ran by simply running `gerbrend [options...]`. Running the c
  * __-n__ Path to back solder mask gerber file
  * __-t__ Path to back silk screen gerber file
  * __-i__ File name of the final rendered front image
- * __-j__ File name of the final rendered front image
+ * __-j__ File name of the final rendered back image
  
 ### Gerber Extensions
 The script searches for the different layers based on the following rules:
