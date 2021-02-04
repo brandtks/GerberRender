@@ -60,7 +60,7 @@ Available options:
         Default: $directory
   -i    File name of the final rendered front image
         Default: $front_image_name
-  -j    File name of the final rendered front image
+  -j    File name of the final rendered back image
         Default: $back_image_name  
   -o    Outline file path 
   -d    Drill file path
